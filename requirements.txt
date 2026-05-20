@@ -1,0 +1,10 @@
+--find-links https://download.pytorch.org/whl/cpu/torch_stable.html
+torch
+torchvision
+ultralytics
+fastapi
+uvicorn
+python-multipart
+pydantic
+requests
+opencv-python-headless
