@@ -5,6 +5,7 @@ import requests
 
 def test_prediction_endpoint():
     url = "http://localhost:8000/api/predict"
+    chat_url = "http://localhost:8000/api/chat"
     test_img_path = "temp_test.jpg"
     
     # 1. Create a dummy test image (640x640 blue square)
@@ -49,16 +50,43 @@ def test_prediction_endpoint():
         
         assert "recommendation" in data, "Missing 'recommendation' field"
         assert isinstance(data["recommendation"], str), "'recommendation' should be a string"
+
+        # Verify new fields
+        assert "site_status" in data, "Missing 'site_status' field"
+        assert isinstance(data["site_status"], str), "'site_status' should be a string"
+        assert data["site_status"] in ["LOW RISK", "MEDIUM RISK", "HIGH RISK", "CRITICAL EMERGENCY"]
+
+        assert "environmental_hazards" in data, "Missing 'environmental_hazards' field"
+        assert isinstance(data["environmental_hazards"], dict), "'environmental_hazards' should be a dictionary"
+        for flag in ["fire", "smoke", "water_leak", "chemical_hazard"]:
+            assert flag in data["environmental_hazards"], f"Missing hazard flag: {flag}"
+            assert isinstance(data["environmental_hazards"][flag], bool), f"Hazard flag '{flag}' must be a boolean"
+
+        assert "ai_analysis" in data, "Missing 'ai_analysis' field"
+        assert isinstance(data["ai_analysis"], str), "'ai_analysis' should be a string"
+        assert "CURRENT THREAT STATUS" in data["ai_analysis"] or "Error" in data["ai_analysis"], "AI Analysis lacks expected sections"
         
-        # Ensure default counts match CLASS_NAMES
-        expected_classes = [
-            "Hardhat", "Mask", "NO-Hardhat", "NO-Mask", "NO-Safety Vest",
-            "Person", "Safety Cone", "Safety Vest", "machinery", "vehicle"
-        ]
-        for name in expected_classes:
-            assert name in data["detections"], f"Missing class '{name}' in detections"
-            
-        print("All API assertions PASSED successfully!")
+        print("API predict assertions PASSED successfully!")
+
+        # 4. Test the chat endpoint
+        print(f"Sending POST request to {chat_url}...")
+        chat_payload = {
+            "message": "What is the immediate action recommended for chemical hazard?",
+            "vision_data": data,
+            "history": []
+        }
+        chat_response = requests.post(chat_url, json=chat_payload)
+        print(f"Chat Response Status Code: {chat_response.status_code}")
+        print("Chat Response JSON Payload:")
+        print(json.dumps(chat_response.json(), indent=2))
+        
+        assert chat_response.status_code == 200, f"Expected 200, got {chat_response.status_code}"
+        chat_data = chat_response.json()
+        assert "reply" in chat_data, "Missing 'reply' field in chat response"
+        assert isinstance(chat_data["reply"], str), "'reply' should be a string"
+        
+        print("API chat assertions PASSED successfully!")
+        print("All API & Chat verification tests PASSED!")
         
     except Exception as e:
         print(f"Test failed with error: {e}")

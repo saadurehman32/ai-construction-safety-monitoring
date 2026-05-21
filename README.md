@@ -1,75 +1,92 @@
 # AI-Powered Construction Site Safety Monitoring Platform
 
-An advanced, real-time safety monitoring and compliance engine that uses a fine-tuned **YOLOv8** computer vision model to detect Personal Protective Equipment (PPE) compliance and automatically generate safety officer inspection reports.
+An advanced, real-time safety monitoring and compliance engine that uses dual fine-tuned **YOLOv8** computer vision models to detect Personal Protective Equipment (PPE) compliance and environmental hazards, generating automated inspections and offering a conversational safety advisor console powered by **Groq Cloud LLM**.
 
 ## Key Features
-- **YOLOv8 PPE Detection Engine**: Runs locally on CPU using custom weights (`best.pt`) targeting 10 classes (Hardhat, Mask, Safety Vest, Person, Vehicle, Machinery, etc.).
-- **Spatial Intersection Compliance Check**: Eliminates double-counting and false alarms by checking if detected safety violations lie within the bounding box of a specific worker (`Person`).
-- **Logic Caps & Per-Person Rules**: Limits workers to a maximum of one safety violation per category (missing Helmet, missing Vest, missing Mask).
-- **FastAPI Backend Processor**: High-performance API using FastAPI, returning real-time compliance results, safety recommendations, and annotated images.
-- **Tailwind CSS React Dashboard**: Dual-view preview matrix rendering raw uploads and annotated tensor outputs side-by-side with dynamic KPI badges and an interactive clipboard safety report panel.
+
+- **Dual-Model Inference Engine**:
+  - **`PPE Compliance.pt`**: Runs at `conf=0.35` on CPU, using a spatial intersection compliance check. It automatically verifies if missing PPE items (helmet, safety vest, mask) lie within the worker's bounding box to prevent false alerts, enforcing a logic cap of one violation per category per person.
+  - **`Hazard Detection.pt`**: Runs concurrently at `conf=0.254` on CPU, flagging environmental dangers: Fire, Smoke, Water Leaks, and Chemical Hazards.
+- **Priority Status Logic**: Automatically maps threat severity to a site status:
+  - `CRITICAL EMERGENCY`: Fire or Chemical Hazard active (triggers a blinking red alert banner on the frontend dashboard).
+  - `HIGH RISK`: Water Leak active or $>2$ PPE violations.
+  - `MEDIUM RISK`: $1$ or $2$ PPE violations.
+  - `LOW RISK`: Fully compliant site with no environmental hazards.
+- **Groq Cloud AI Safety Officer**:
+  - Connects to Groq (`llama3-8b-8192` with active model fallbacks) to transform vision logs into a structured 4-section safety assessment report covering current threat status, OSHA-compliant risk assessments, immediate field directives, and SMS emergency broadcast templates.
+  - Handles real-time follow-up conversations using a conversational safety supervisor role.
+- **Modern Split-Pane Dashboard**:
+  - **70% Left Pane**: Image upload control center, KPI status metrics, environmental threat indicators, and annotated side-by-side image overlays.
+  - **30% Right Pane**: Interactive safety chat sidebar rendered with `react-markdown`.
 
 ---
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, Uvicorn, Ultralytics (YOLOv8), OpenCV, Pydantic.
-- **Frontend**: React, Vite, Tailwind CSS v4, PostCSS, Lucide React.
+
+- **Backend**: Python, FastAPI, Uvicorn, Ultralytics (YOLOv8), OpenCV, Groq Python SDK, Pydantic, python-dotenv.
+- **Frontend**: React, Vite, Tailwind CSS v4, PostCSS, Lucide React, react-markdown.
 
 ---
 
 ## Directory Structure
+
 ```text
 Construction Safety Hazard Detection/
-├── main.py                  # Central FastAPI backend application
-├── test_api.py              # Mock image integration test script
+├── main.py                  # FastAPI application with dual model pipelines & Groq integration
+├── test_api.py              # Automated API and LLM chat integration verification script
 ├── requirements.txt         # CPU-optimized Python dependencies list
-├── best.pt                  # Fine-tuned YOLOv8 model weights
+├── PPE Compliance.pt        # Fine-tuned YOLOv8 PPE detection weights
+├── Hazard Detection.pt      # Fine-tuned YOLOv8 environmental hazard weights
 ├── static/
-│   └── predictions/         # Internal storage for annotated output frames
+│   └── predictions/         # Temporary storage for dual-annotated inference frames
 ├── frontend/
-│   ├── package.json         # Frontend dependencies and Vite scripts
-│   ├── vite.config.js       # Vite configuration (runs on port 3000)
-│   ├── postcss.config.js    # PostCSS plugins configuration
+│   ├── package.json         # Frontend package configuration and scripts
+│   ├── vite.config.js       # Vite configuration running on port 3000
 │   ├── src/
 │   │   ├── main.jsx         # React mounting entrypoint
-│   │   ├── App.jsx          # Dashboard layout component
-│   │   └── index.css        # Global CSS, keyframes, and Tailwind imports
+│   │   ├── App.jsx          # Split-pane dashboard & chat console layout
+│   │   └── index.css        # Global styles and Tailwind imports
 ```
 
 ---
 
 ## Getting Started
 
-### 1. Backend Setup & Installation
-Activate the virtual environment and install the CPU-optimized torch wheels:
+### 1. Backend Setup & Configuration
 
-```bash
-# Activate Virtual Environment
-.\venv\Scripts\activate
+1. Create a `.env` file at the root of the project with your Groq API Key:
+   ```env
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
+2. Activate your virtual environment and install the backend dependencies:
+   ```bash
+   # Activate virtual environment
+   .\venv\Scripts\activate
 
-# Install dependencies (configured for lightweight CPU compilation)
-pip install -r requirements.txt
+   # Install requirements
+   pip install -r requirements.txt
 
-# Run the FastAPI server in background reload mode
-uvicorn main:app --port 8000 --host 127.0.0.1 --reload
-```
+   # Start the FastAPI backend
+   python main.py
+   ```
+   The backend API docs are available at `http://127.0.0.1:8000/docs`.
 
-The backend API documentation is available at `http://localhost:8000/docs`.
+### 2. Frontend Development Setup
 
-### 2. Frontend Dashboard Setup
-In a separate terminal, navigate to the `frontend/` folder and run the developer dev server:
+1. In a separate terminal, navigate to the `frontend/` directory and install packages:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Run the hot-reloading development server:
+   ```bash
+   npm run dev
+   ```
+   The application dashboard will run locally at `http://localhost:3000`.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 3. Run Automated Integration Verification
 
-The React dashboard runs on `http://localhost:3000`.
-
-### 3. Verification Testing
-You can verify the backend endpoints and schema validation integrity by executing the automated test suite:
-
+Validate the integrity of predictions, schemas, and chat follow-up flows using the test suite:
 ```bash
 .\venv\Scripts\python test_api.py
 ```
