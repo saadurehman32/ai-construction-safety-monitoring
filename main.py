@@ -127,8 +127,8 @@ def enhance_image(img):
     lab_enhanced = cv2.merge((cl, a_channel, b_channel))
     equalized = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
     
-    # 3. Bilateral Filtering (Edge-preserving noise reduction)
-    filtered = cv2.bilateralFilter(equalized, d=9, sigmaColor=75, sigmaSpace=75)
+    # 3. Median Filtering (Noise reduction)
+    filtered = cv2.medianBlur(equalized, 5)
     
     # 4. Gamma Correction (Illumination normalization)
     gamma = 1.2
