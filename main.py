@@ -115,6 +115,33 @@ def call_groq_with_fallback(messages, temperature=0.3):
             last_err = e
     raise last_err
 
+def enhance_image(img):
+    # 1. Contrast Stretching (Min-Max Normalization)
+    stretched = cv2.normalize(img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    
+    # 2. CLAHE (Local Contrast Equalization in LAB color space)
+    lab = cv2.cvtColor(stretched, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l_channel)
+    lab_enhanced = cv2.merge((cl, a_channel, b_channel))
+    equalized = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+    
+    # 3. Bilateral Filtering (Edge-preserving noise reduction)
+    filtered = cv2.bilateralFilter(equalized, d=9, sigmaColor=75, sigmaSpace=75)
+    
+    # 4. Gamma Correction (Illumination normalization)
+    gamma = 1.2
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    corrected = cv2.LUT(filtered, table)
+    
+    # 5. Unsharp Masking (Image sharpening)
+    gaussian = cv2.GaussianBlur(corrected, (0, 0), 2.0)
+    sharpened = cv2.addWeighted(corrected, 1.5, gaussian, -0.5, 0)
+    
+    return sharpened
+
 @app.post("/api/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
     # Validate file type
@@ -136,20 +163,21 @@ async def predict(file: UploadFile = File(...)):
         if hazard_model is None:
             raise HTTPException(status_code=500, detail="Hazard Detection model is not loaded correctly.")
 
+        # Apply image enhancement pipeline
+        enhanced_img = enhance_image(img)
+
         # 1. Run inference using PPE Compliance model with conf=0.35 on CPU
-        results = ppe_model(img, conf=0.35, device="cpu")
+        results = ppe_model(enhanced_img, conf=0.35, device="cpu")
         annotated_frame = results[0].plot()
         
         # 2. Run inference using Hazard Detection model with conf=0.254 on CPU
-        hazard_results = hazard_model(img, conf=0.254, device="cpu")
+        hazard_results = hazard_model(enhanced_img, conf=0.254, device="cpu")
         # Draw hazard boxes on top of the PPE annotated frame
         annotated_frame = hazard_results[0].plot(img=annotated_frame)
         
-        # Save output image under static/predictions
+        # Setup output paths (saving is deferred until watermark details are computed)
         unique_filename = f"pred_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join("static", "predictions", unique_filename)
-        cv2.imwrite(output_path, annotated_frame)
-        
         prediction_image_url = f"/static/predictions/{unique_filename}"
         
         # Initialize counts and groupings for PPE spatial checks
@@ -334,6 +362,30 @@ async def predict(file: UploadFile = File(...)):
                 "### 🔔 AUTOMATED NOTIFICATION PROTOCOL (provide an emergency SMS broadcast text box template inside a blockquote)\n"
                 "> EMERGENCY BREACH DETECTED. PLEASE RESOLVE IMMEDIATELY."
             )
+
+        # Draw watermark card at the top-left of the final annotated frame
+        overlay = annotated_frame.copy()
+        cv2.rectangle(overlay, (10, 10), (320, 75), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, annotated_frame, 0.4, 0, annotated_frame)
+        
+        # Draw text contents
+        import datetime
+        timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cv2.putText(annotated_frame, f"TIME: {timestamp_str}", (20, 35), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        
+        # Color coding for site status: Green for low, Orange for medium, Red for high/critical
+        status_color = (0, 255, 0)
+        if site_status in ["CRITICAL EMERGENCY", "HIGH RISK"]:
+            status_color = (0, 0, 255)
+        elif site_status == "MEDIUM RISK":
+            status_color = (0, 165, 255)
+            
+        cv2.putText(annotated_frame, f"STATUS: {site_status}", (20, 60), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, status_color, 1, cv2.LINE_AA)
+
+        # Write output image to disk
+        cv2.imwrite(output_path, annotated_frame)
 
         return PredictionResponse(
             detections=counts,
