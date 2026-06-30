@@ -1,3 +1,4 @@
+<img width="1423" height="887" alt="ai 2" src="https://github.com/user-attachments/assets/cfd2fcf0-9245-4be3-998a-42cbc4b34c5b" />
 # AI-Powered Construction Site Safety Monitoring Platform
 
 An advanced, real-time safety monitoring and compliance engine that uses dual fine-tuned **YOLOv8** computer vision models to detect Personal Protective Equipment (PPE) compliance and environmental hazards, generating automated inspections and offering a conversational safety advisor console powered by **Groq Cloud LLM**.
